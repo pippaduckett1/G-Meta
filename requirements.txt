@@ -6,3 +6,6 @@ scipy
 tqdm
 scikit-learn
 pandas
+memory-profiler
+
+# pip install dgl -f https://data.dgl.ai/wheels/repo.html

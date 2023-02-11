@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 import dgl
 import networkx as nx
 import itertools
+import sys
 
 class Subgraphs(Dataset):
     def __init__(self, root, mode, subgraph2label, n_way, k_shot, k_query, batchsz, args, adjs, h):
@@ -43,7 +44,7 @@ class Subgraphs(Dataset):
 
         self.G = []
 
-        for i in adjs:
+        for i in adjs: #adjs are graphs in dgl_graph from train.py script
             self.G.append(i)
         
         self.subgraphs = {}
@@ -64,18 +65,19 @@ class Subgraphs(Dataset):
 
                 for i, (k, v) in enumerate(dictGraphs_spt.items()):
                     self.data_graph_spt.append(v)
+
                 self.graph_num_spt = len(self.data_graph_spt)
 
-                self.data_label_spt = [[] for i in range(self.graph_num_spt)]
+                self.data_label_spt = [[] for _ in range(self.graph_num_spt)]
 
                 relative_idx_map_spt = dict(zip(list(dictGraphs_spt.keys()), range(len(list(dictGraphs_spt.keys())))))
 
                 for i, (k, v) in enumerate(dictGraphsLabels_spt.items()):
                     for m, n in v.items():
                         self.data_label_spt[relative_idx_map_spt[k]].append(n)
-                        
+
                 self.cls_num_spt = len(self.data_label_spt[0])
-                
+
                 self.data_graph_qry = []
 
                 for i, (k, v) in enumerate(dictGraphs_qry.items()):
@@ -108,7 +110,6 @@ class Subgraphs(Dataset):
                 for i, (k, v) in enumerate(dictGraphsLabels.items()):
                     #self.data_label[k] = []
                     for m, n in v.items():
-
                         self.data_label[relative_idx_map[k]].append(n)  # [(graph 1)[(label1)[subgraph1, subgraph2, ...], (label2)[subgraph111, ...]], graph2: [[subgraph1, subgraph2, ...], [subgraph111, ...]] ]
                 self.cls_num = len(self.data_label[0])
                 self.graph_num = len(self.data_graph)
@@ -313,7 +314,8 @@ class Subgraphs(Dataset):
                 h_hops_neighbor = np.random.choice(h_hops_neighbor, self.sample_nodes, replace = False)
                 h_hops_neighbor = np.unique(np.append(h_hops_neighbor, [i]))
             
-            sub = G.subgraph(h_hops_neighbor)         
+            # sub = G.subgraph(h_hops_neighbor)  
+            sub = dgl.node_subgraph(G, h_hops_neighbor) # OR dgl.khop_in_subgraph  
             h_c = list(sub.parent_nid.numpy())
             dict_ = dict(zip(h_c, list(range(len(h_c)))))
             self.subgraphs[item] = (sub, dict_[i], h_c)
@@ -324,24 +326,32 @@ class Subgraphs(Dataset):
         if item in self.subgraphs:
             return self.subgraphs[item]
         else:
-            f_hop = [n.item() for n in G.in_edges(i)[0]]
-            n_l = [[n.item() for n in G.in_edges(i)[0]] for i in f_hop]
-            h_hops_neighbor1 = torch.tensor(list(set([item for sublist in n_l for item in sublist] + f_hop + [i]))).numpy()
-            
+            f_hop = [n.item() for n in G.in_edges(i)[0]] #G.in_edges(node_id) return the incoming edges of the node i, f_hop is list of incoming edges to node i
+            n_l = [[n.item() for n in G.in_edges(k)[0]] for k in f_hop] # for each of the connecting nodes, return list of nodes that connect to those
+            h_hops_neighbor1 = torch.tensor(list(set([item for sublist in n_l for item in sublist] + f_hop + [i]))).numpy() # set of every item in every list in n_l + f_hop + i
+            # h_hops_neighbor1 seems to be the 2 hop neighbourhood of node i
+
+            # same as above but for node j
             f_hop = [n.item() for n in G.in_edges(j)[0]]
-            n_l = [[n.item() for n in G.in_edges(j)[0]] for i in f_hop]
+            n_l = [[n.item() for n in G.in_edges(k)[0]] for k in f_hop]
             h_hops_neighbor2 = torch.tensor(list(set([item for sublist in n_l for item in sublist] + f_hop + [j]))).numpy()
             
-            h_hops_neighbor = np.union1d(h_hops_neighbor1, h_hops_neighbor2)
+            h_hops_neighbor = np.union1d(h_hops_neighbor1, h_hops_neighbor2) # 2 hop neighbours for nodes i & j
             
+            # set limit of self.sample_nodes number of nodes to sample
             if h_hops_neighbor.reshape(-1,).shape[0] > self.sample_nodes:
                 h_hops_neighbor = np.random.choice(h_hops_neighbor, self.sample_nodes, replace = False)
                 h_hops_neighbor = np.unique(np.append(h_hops_neighbor, [i, j]))
                 
-            sub = G.subgraph(h_hops_neighbor)         
-            h_c = list(sub.parent_nid.numpy())
+            # sub = G.subgraph(h_hops_neighbor) #dgl.DGLGraph.subgraph returns the subgraph consisting of nodes h_hops_neighbour
+            
+            sub = dgl.node_subgraph(G, h_hops_neighbor, store_ids=True) # OR dgl.khop_in_subgraph
+            h_c = list(sub.ndata[dgl.NID].numpy())  # original node IDs
+            # print(sub.edata[dgl.EID])  # original edge IDs
+            
+            # h_c = list(sub.parent_nid.numpy()) #DGLSubGraph.parent_nid: Get the parent node ids. The returned tensor can be used as a map from the node id in this subgraph to the node id in the parent graph.
             dict_ = dict(zip(h_c, list(range(len(h_c)))))
-            self.subgraphs[item] = (sub, [dict_[i], dict_[j]], h_c)
+            self.subgraphs[item] = (sub, [dict_[i], dict_[j]], h_c) # (subgraph, subgraph_id for node i, subgraph id for node j, list of parent nodes that exist in subgraph)
             
             return sub, [dict_[i], dict_[j]], h_c
     
@@ -353,7 +363,7 @@ class Subgraphs(Dataset):
         #print(self.support_x_batch[index])
         if self.link_pred_mode:
             info = [self.generate_subgraph_link_pred(self.G[int(item.split('_')[0])], int(item.split('_')[1]), int(item.split('_')[2]), item)
-                    for sublist in self.support_x_batch[index] for item in sublist]
+                    for sublist in self.support_x_batch[index] for item in sublist] # item consists of [graphid_nodeid1_nodeid2], info is a list of subgraphs that have been generate from nodes nodeid1 and nodeid2 in graph: graph_id, G contains a list of graphs
         else:
             info = [self.generate_subgraph(self.G[int(item.split('_')[0])], int(item.split('_')[1]), item)
                     for sublist in self.support_x_batch[index] for item in sublist]

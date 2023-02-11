@@ -6,10 +6,23 @@ import numpy as np
 import random
 import pickle
 import pandas as pd
+import sys
 
-path = 'PATH'
-adjs = np.load(path + '/graphs_adj.npy', allow_pickle = True)
-# this .npy file is an array of 2D-array. [A1, A2, ..., An] where Ai is the adjacency matrix of graph i.
+path = 'CoraTest'
+# adjs = np.load(path + '/graphs_adj.npy', allow_pickle = True)
+# # this .npy file is an array of 2D-array. [A1, A2, ..., An] where Ai is the adjacency matrix of graph i.
+adjs = [dgl.data.CoraGraphDataset()[0], dgl.data.CoraGraphDataset()[0], dgl.data.CoraGraphDataset()[0], dgl.data.CoraGraphDataset()[0], 
+dgl.data.CoraGraphDataset()[0], dgl.data.CoraGraphDataset()[0], dgl.data.CoraGraphDataset()[0], dgl.data.CoraGraphDataset()[0], 
+dgl.data.CoraGraphDataset()[0], dgl.data.CoraGraphDataset()[0], dgl.data.CoraGraphDataset()[0], dgl.data.CoraGraphDataset()[0], 
+dgl.data.CoraGraphDataset()[0], dgl.data.CoraGraphDataset()[0], dgl.data.CoraGraphDataset()[0], dgl.data.CoraGraphDataset()[0], dgl.data.CoraGraphDataset()[0]]
+
+num_nodes = dgl.data.CoraGraphDataset()[0].num_nodes()
+num_feat = 5
+feats = [np.random.rand(num_nodes,num_feat)]
+for _ in range(len(adjs) -1):
+    feats.append(np.random.rand(num_nodes,num_feat))
+feats = np.asarray(feats)
+
 
 training_edges_fraction = 0.3
 pos_test_edges = []
@@ -28,15 +41,13 @@ center_nodes = {}
 G_all_graphs = []
 
 for idx_ in tqdm(range(len(adjs))):
-    G = nx.from_numpy_array(adjs[idx_])
-    
-    adj_upp = np.multiply(adjs[idx_], np.triu(np.ones(adjs[idx_].shape)))
-    x1, x2 = np.where(adj_upp == 1)
-    edges = list(zip(x1, x2))
-    
+    G = adjs[idx_]
+
+    edges = list(zip([element.item() for element in G.edges()[0]],[element.item() for element in G.edges()[1]]))  #[(0,0), (1,1), (0,1)]
+
     # training edges
-    sampled = np.random.choice(list(range(len(edges))), int(len(edges)*training_edges_fraction), replace = False)
-    
+    sampled = np.random.choice(list(range(len(edges))), int(len(edges)*training_edges_fraction), replace = False) # list of indices for edges in list
+
     pos_train_edges.append([str(idx_) + '_' + str(i[0]) + '_' + str(i[1]) for i in np.array(edges)[sampled]])
 
     pos_test = [i for i in list(range(len(edges))) if i not in sampled]
@@ -44,15 +55,16 @@ for idx_ in tqdm(range(len(adjs))):
     pos_test_edges.append([str(idx_) + '_' + str(i[0]) + '_' + str(i[1]) for i in np.array(edges)[pos_test]])
         
     G_sample = dgl.DGLGraph()
-    G_sample.add_nodes(len(G.nodes))
+    G_sample.add_nodes(len(G.nodes()))
     G_sample.add_edges(np.array(edges).T[0], np.array(edges).T[1])    
-    num_pos = np.sum(adjs[idx_])/2
+    # num_pos = np.sum(adjs[idx_])/2
     
-    sampled_frac = int(5*(sum(sum(adjs[idx_]))/len(G.nodes)))
-    
+    # sampled_frac = int(5*(sum(sum(adjs[idx_]))/len(G.nodes()))) # fraction of nodes to sample from graph
+    sampled_frac = 10 #TODO put the right fraction in for this
+
     comb = []
-    for i in list(range(len(G.nodes))):
-        l = list(range(len(G.nodes)))
+    for i in list(range(len(G.nodes()))):
+        l = list(range(len(G.nodes())))
         l.remove(i)
         comb = comb + (list(zip([i] * sampled_frac, random.choices(l, k = sampled_frac))))
 
@@ -83,7 +95,7 @@ for idx_ in tqdm(range(len(adjs))):
     
     for i in np.array(neg_edges):
         # negative injection, following SEAL
-        G_sample.add_edge(i[0],i[1])
+        G_sample.add_edges(i[0],i[1])
     
     G_all_graphs.append(G_sample)
     
@@ -156,6 +168,8 @@ test_qry = pd.DataFrame()
 train = pd.DataFrame()
 val = pd.DataFrame()
 test = pd.DataFrame()
+
+np.save(temp_path + '/features.npy', feats)
 
 for graph_id in range(len(val_graph)):
 

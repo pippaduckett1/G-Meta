@@ -43,6 +43,7 @@ def main():
     with open(root + '/graph_dgl.pkl', 'rb') as f:
         dgl_graph = pickle.load(f)
 
+
     if args.task_setup == 'Disjoint':    
         with open(root + 'label.pkl', 'rb') as f:
             info = pickle.load(f)
@@ -164,7 +165,7 @@ if __name__ == '__main__':
     argparser.add_argument('--attention_size', type=int, help='dim of attention_size', default=32)
     argparser.add_argument("--data_dir", default=None, type=str, required=True, help="The input data dir.")
     argparser.add_argument("--no_finetune", default=True, type=str, required=False, help="no finetune mode.")
-    argparser.add_argument("--task_setup", default='Disjoint', type=str, required=True, help="Select from Disjoint or Shared Setup. For Disjoint-Label, single/multiple graphs are both considered.")
+    argparser.add_argument("--task_setup", default='Shared', type=str, required=False, help="Select from Disjoint or Shared Setup. For Disjoint-Label, single/multiple graphs are both considered.")
     argparser.add_argument("--method", default='G-Meta', type=str, required=False, help="Use G-Meta")
     argparser.add_argument('--task_n', type=int, help='task number', default=1)
     argparser.add_argument("--task_mode", default='False', type=str, required=False, help="For Evaluating on Tasks")
@@ -172,7 +173,7 @@ if __name__ == '__main__':
     argparser.add_argument("--train_result_report_steps", default=30, type=int, required=False, help="training report")
     argparser.add_argument("--num_workers", default=0, type=int, required=False, help="num of workers")
     argparser.add_argument("--batchsz", default=1000, type=int, required=False, help="batch size")
-    argparser.add_argument("--link_pred_mode", default='False', type=str, required=False, help="For Link Prediction")
+    argparser.add_argument("--link_pred_mode", default='True', type=str, required=False, help="For Link Prediction")
     argparser.add_argument("--h", default=2, type=int, required=False, help="neighborhood size")
     argparser.add_argument('--sample_nodes', type=int, help='sample nodes if above this number of nodes', default=1000)
 

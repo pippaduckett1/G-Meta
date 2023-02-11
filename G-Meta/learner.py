@@ -6,10 +6,10 @@ from torch.nn import init
 import dgl
 
 # Sends a message of node feature h.
-msg = fn.copy_src(src='h', out='m')
+msg = fn.copy_u(u'h', out='m')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# copied and editted from DGL Source 
+# GNN - eventually replace this with own GNN model
 class GraphConv(nn.Module):
     def __init__(self,
                  in_feats,
@@ -35,13 +35,13 @@ class GraphConv(nn.Module):
             # mult W first to reduce the feature size for aggregation.
             feat = torch.matmul(feat, weight)
             graph.ndata['h'] = feat
-            graph.update_all(fn.copy_src(src='h', out='m'),
+            graph.update_all(fn.copy_u(u='h', out='m'),
                              fn.sum(msg='m', out='h'))
             rst = graph.ndata['h']
         else:
             # aggregate first then mult W
             graph.ndata['h'] = feat
-            graph.update_all(fn.copy_src(src='h', out='m'),
+            graph.update_all(fn.copy_u(u='h', out='m'),
                              fn.sum(msg='m', out='h'))
             rst = graph.ndata['h']
             rst = torch.matmul(rst, weight)
@@ -158,8 +158,8 @@ class Classifier(nn.Module):
 
                 if idx_gcn == len(self.graph_conv):
                     #h = dgl.mean_nodes(g, 'h')
-                    num_nodes_ = g.batch_num_nodes
-                    temp = [0] + num_nodes_
+                    num_nodes_ = g.batch_num_nodes()
+                    temp = [0] + list(num_nodes_.numpy())
                     offset = torch.cumsum(torch.LongTensor(temp), dim = 0)[:-1].to(device)
                     
                     if self.LinkPred_mode:
